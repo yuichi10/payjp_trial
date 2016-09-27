@@ -1,12 +1,14 @@
 package main
 
 import (
-    _ "account"
-    "fmt"
-    "github.com/joho/godotenv"
-    "log"
-    "os"
-    "dbase"
+	"account"
+	"fmt"
+	"github.com/gorilla/context"
+	_ "github.com/gorilla/mux"
+	"github.com/joho/godotenv"
+	"log"
+	"net/http"
+	_ "os"
 )
 
 func Env_load() {
@@ -17,10 +19,17 @@ func Env_load() {
 }
 
 func main() {
-    Env_load()
-    dbase.InitDB()
-    db := dbase.OpenDB()
-    dbase.AddTestCode(db)
-    //account.TestDB()
-    fmt.Println(os.Getenv("DB_USER"))
+	Env_load()
+	account.InitDB()
+	//db := dbase.OpenDB()
+	//dbase.AddTestCode(db)
+	//account.TestDB()
+	http.HandleFunc("/", helloGo)
+	http.HandleFunc("/account/getToken", account.GetToken)
+	http.HandleFunc("/account/addCardInfo", account.AddCardInfo)
+	http.ListenAndServe(":9978", context.ClearHandler(http.DefaultServeMux))
+}
+
+func helloGo(w http.ResponseWriter, r *http.Request) {
+	fmt.Fprint(w, "Hello GO!!!!")
 }
