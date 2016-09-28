@@ -28,7 +28,13 @@ func addTestUsers(db *gorm.DB) {
 }
 func addTestItems(db *gorm.DB) {
 	for i := 0; i < 10; i++ {
-		item := Item{UserID: rand.Intn(4) + 1, Name: fmt.Sprintf("itemName_%d", i+1), Orders: nil}
+		item := Item{
+			UserID: uint(rand.Intn(4) + 1), 
+			Name: fmt.Sprintf("itemName_%d", i+1), 
+			BasePrice: i*1000, 
+			DailyCharge: i*800,
+			DepositFee: i*20000,
+			Orders: nil}
 		db.Create(&item)
 	}
 }

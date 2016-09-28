@@ -9,6 +9,7 @@ import (
 	"log"
 	"net/http"
 	_ "os"
+	"dbase"
 )
 
 func Env_load() {
@@ -21,9 +22,12 @@ func Env_load() {
 func main() {
 	Env_load()
 	account.InitDB()
-	//db := dbase.OpenDB()
-	//dbase.AddTestCode(db)
+	
 	//account.TestDB()
+	db := dbase.OpenDB()
+	defer db.Close()
+	//defer db.Close()
+	//account.AddTestCode(db)
 	http.HandleFunc("/", helloGo)
 	http.HandleFunc("/account/getToken", account.GetToken)
 	http.HandleFunc("/account/addCardInfo", account.AddCardInfo)

@@ -17,8 +17,10 @@ import (
 
 type Item struct {
 	gorm.Model
-	UserID int
+	UserID uint
 	Name   string `gorm:"column:name;size:50"`
-
+	BasePrice int	`gorm:"column:base_price;not null"`
+	DailyCharge int	`gorm:"column:daily_charge;not null"`
+	DepositFee int	`gorm:"column:deposit_fee;not null"`
 	Orders []Order `gorm:"ForeignKey:ItemID;"`
 }

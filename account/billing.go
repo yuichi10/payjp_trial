@@ -8,6 +8,8 @@ import (
 	"github.com/bitly/go-simplejson"
 	"net/http"
 	"strconv"
+	"time"
+	"github.com/jinzhu/gorm"
 )
 
 type resError struct {
@@ -136,8 +138,114 @@ func PublishOrder(w http.ResponseWriter, r *http.Request) {
 		responseError(400, D.InvalidParamKeyMessage, w)
 		return
 	}
-	//rentalFrom, rentalTo := getInputAjustedTimes(rFrom, rTo)
+	uID := r.Form.Get(UserID)
+	var userID uint64
+	var err error
+	if userID, err = strconv.ParseUint(uID, 10, 64); err != nil {
+		responseError(400, D.InvalidParamKeyMessage, w)
+		return
+	}
+	rentalFrom, rentalTo := getInputAjustedTimes(rFrom, rTo)
+	order := Order{}
+	order.UserID = uint(userID)
+	order.RentalFrom = &rentalFrom
+	order.RentalTo = &rentalTo
+	
 }
 
+
+/**
+ * かせるかどうかの日にち判定
+ */
+func checkRentalDay(from, to time.Time, itemID string, db *gorm.DB) bool {
+	var able bool
+	//仮売上のリミットから借りれるかどうかの判断
+	if able = checkRentalProvisonLimit(from); !able {
+		return able
+	}
+	//もうすでにその期間借りられてないかどうかのチェック
+	//if able = checkDoubleBooking(from, to, itemID, db); !able {
+	//	return able
+	//}
+	//利用日から考えて利用できないかどうかのチェック
+	if able = checkRentalDayStart(from); !able {
+		return able
+	}
+	//前後のレンタルの日程を調べてマージンが足りなかった場合予約できないようにする
+	return true
+}
+
+//レンタルがスタートする人予約できる日の制限をチェックする
+func checkRentalDayStart(from time.Time) bool {
+	nowDay := time.Now()
+	nowDay = timeToTimeYMD(nowDay)
+	canRentalDay := from.AddDate(0, 0, D.CAN_BOOK_DAY_FROM_RENTAL_FROM)
+	subTime := canRentalDay.Sub(nowDay)
+	fmt.Printf(" today: %v\nrental from : %v\ncanRental: %v\nsubMinutes: %v\n\n", nowDay, from, canRentalDay, subTime.Hours())
+	if subTime.Minutes() < 0 {
+		return false
+	}
+	return true
+}
+
+//仮売上の日程からチェック
+func checkRentalProvisonLimit(from time.Time) bool {
+	nowTime := time.Now()
+	nowTime = time.Date(nowTime.Year(), nowTime.Month(), nowTime.Day(), nowTime.Hour(), nowTime.Minute(), 0, 0, time.UTC)
+	//契約できる日かどうか(今はとりあえず仮売上の日にちを超えないようになってるかどうか)
+	subDays := calcSubDate(nowTime, from)
+	fmt.Printf("%v : %v 時間差: %v \n", from, nowTime, subDays)
+	if subDays > D.DAY_LIMIT {
+		return false
+	}
+	return true
+}
+/*
+//その日にもう借りられてないかどうか
+func checkDoubleBooking(tFrom, tTo time.Time, itemID string, db *gorm.DB) bool {
+	//始まりか終わりどちらかが利用期間にかかってる
+	//SELECT count(*) FROM orders WHERE (item_id=4 AND (status=1 OR status=2)) AND ('2016-8-22' BETWEEN rental_from AND rental_to OR '2016-8-22' BETWEEN rental_from AND rental_to);
+	var count int = 0
+	marginFrom := tFrom.AddDate(0,0,-D.BOOK_MARGIN_DAYS)
+	marginTo := tTo.AddDate(0,0,D.BOOK_MARGIN_DAYS)
+	from := timeToStrYMD(marginFrom)
+	to := timeToStrYMD(marginTo)
+	fmt.Printf("from -> to : %v -> %v \n", from, to)
+	//ステータスのsql
+	dbState := fmt.Sprintf("(%v=%v)", ORDER_STATUS, STATUS_GET_CONSENT)
+	dbWhereTime := fmt.Sprintf("('%v' BETWEEN %v AND %v OR '%v' BETWEEN %v AND %v)", from, RENTAL_FROM, RENTAL_TO, to, RENTAL_FROM, RENTAL_TO)
+	dbSql := fmt.Sprintf("SELECT count(*) FROM %v WHERE (%v=%v AND %v) AND %v", ORDER, ITEM_ID, itemID, dbState, dbWhereTime)
+	fmt.Printf("sql: %v \n", dbSql)
+	res, err := db.Query(dbSql)
+	var count1 int
+	if err != nil {
+		return false
+	}
+	for res.Next() {
+		if err := res.Scan(&count1); err != nil {
+			return false
+		}
+	}
+	count += count1
+	//レンタルする間に他のレンタルがある場合
+	dbSql = fmt.Sprintf("SELECT count(*) FROM %v WHERE (%v=%v AND %v) AND ('%v'<%v AND '%v'>%v)", ORDER, ITEM_ID, itemID, dbState, from, RENTAL_FROM, to, RENTAL_TO)
+	fmt.Printf("sql: %v \n", dbSql)
+	res, err = db.Query(dbSql)
+	var count2 int
+	if err != nil {
+		return false
+	}
+	for res.Next() {
+		if err := res.Scan(&count2); err != nil {
+			return false
+		}
+	}
+	count += count2
+	if count == 0 {
+		return true
+	}
+	return false
+}
+*/
 
 

@@ -24,8 +24,8 @@ type Order struct {
 	TransportAllocate int        `gorm:"column:transport_allocate;not null;default:0"`
 	RentalFrom        *time.Time `gorm:"column:rental_from;"`
 	RentalTo          *time.Time `gorm:"column:rental_to;"`
-	ItemID            int
-	UserID            int
+	ItemID            uint
+	UserID            uint
 	DayPrice          int        `gorm:"column:day_price;not null"`
 	AfterDayPrice     int        `gorm:"column:after_day_price;not null"`
 	InsurancePrice    int        `gorm:"column:insurance_price;not null"`
@@ -35,4 +35,10 @@ type Order struct {
 	CancelDate        *time.Time `gorm:"column:cancel_date"`
 	CancelStatus      int        `gorm:"column:cancel_status;not null"`
 	Status            int        `gorm:"column:status;not null;default:0"`
+}
+
+//期間がまるごと予約されている期間があるかどうかの検索
+func countOtherOverlapBook(db *gorm.DB) {
+	count := 0
+	db.Model(&Order{}).Where("(item_id=? AND status=?) AND (? BETWEEN rental_from AND rental_to OR ? BETWEEN rental_from AND rental_to)").Count(&count)
 }
