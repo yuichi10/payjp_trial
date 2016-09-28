@@ -130,8 +130,8 @@ func timeToTimeYMD(t time.Time) time.Time {
 /**
  * 借りる日数を計算
  */
-func calcSubDate(pre, post time.Time) int {
-	subTime := post.Sub(pre)
+func calcSubDate(pre, post *time.Time) int {
+	subTime := post.Sub(*pre)
 	days := int(subTime.Hours()) / 24
 	if subTime.Minutes()/(24*60)-float64(days) > 0 {
 		days++

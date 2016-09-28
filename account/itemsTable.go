@@ -14,7 +14,9 @@ import (
 
    alter table items add constraint user_item_fk foreign key (user_id) references users(id) on delete cascade on update cascade;
 */
-
+const (
+	ItemID = "item_id"
+)
 type Item struct {
 	gorm.Model
 	UserID uint
@@ -23,4 +25,13 @@ type Item struct {
 	DailyCharge int	`gorm:"column:daily_charge;not null"`
 	DepositFee int	`gorm:"column:deposit_fee;not null"`
 	Orders []Order `gorm:"ForeignKey:ItemID;"`
+}
+
+func getItemInfo(itemID uint64, db *gorm.DB) *Item {
+	item := new(Item)
+	db.Where("id=?", itemID).First(&item)
+	if item.ID == 0 {
+		return nil
+	}
+	return item
 }

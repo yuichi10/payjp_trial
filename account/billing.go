@@ -24,13 +24,14 @@ type resToken struct {
 
 const jsonErrorResponse = "{\"error\":{\"error_message\":\"invalid_param_key\"}}"
 
-func TestDB() {
+func TestDB(w http.ResponseWriter, r *http.Request) {
 	db := dbase.OpenDB()
 	defer db.Close()
 	db.DB()
-	orderType := new(Order)
-	db.First(orderType)
-	fmt.Println(orderType)
+	rF,_ := strTimeToTime("2018-8-14")
+	rT,_ := strTimeToTime("2018-8-16")
+	c := countOtherOverlapBook(&rF, &rT, 5, db)
+	fmt.Println(c)
 }
 
 const (
@@ -145,19 +146,45 @@ func PublishOrder(w http.ResponseWriter, r *http.Request) {
 		responseError(400, D.InvalidParamKeyMessage, w)
 		return
 	}
+	iID := r.Form.Get(ItemID)
+	var itemID uint64
+	if itemID, err = strconv.ParseUint(iID, 10, 64); err != nil {
+		responseError(400, D.InvalidParamKeyMessage, w)
+		return
+	}
 	rentalFrom, rentalTo := getInputAjustedTimes(rFrom, rTo)
 	order := Order{}
+	item := getItemInfo(itemID, db)
+	if item == nil {
+		fmt.Println("itemが見つからない")
+		responseError(400, D.InvalidParamKeyMessage, w)
+		return
+	}
 	order.UserID = uint(userID)
 	order.RentalFrom = &rentalFrom
 	order.RentalTo = &rentalTo
-	
+	order.ItemID = item.ID
+	order.BasePrice = item.BasePrice
+	order.DailyCharge = item.DailyCharge
+	order.DepositFee = item.DepositFee
+	order.InsurancePrice = int (float64(order.BasePrice) * D.InsurancePriceRatio)
+	purePrice := order.calcPureRentalPrice()
+	order.ManagementCharge = int (float64 (purePrice) * D.ManegementChargeRatio)
+	order.Amount = purePrice + order.InsurancePrice + order.ManagementCharge
+	db.Create(&order)
+	orderJs, isSuccess := jsonMarshalAndResponseError(order, w)
+	if !isSuccess {
+		return
+	} 
+	fmt.Fprintf(w, "%v", orderJs)
+	return
 }
 
 
 /**
  * かせるかどうかの日にち判定
  */
-func checkRentalDay(from, to time.Time, itemID string, db *gorm.DB) bool {
+func checkRentalDay(from, to *time.Time, itemID string, db *gorm.DB) bool {
 	var able bool
 	//仮売上のリミットから借りれるかどうかの判断
 	if able = checkRentalProvisonLimit(from); !able {
@@ -176,7 +203,7 @@ func checkRentalDay(from, to time.Time, itemID string, db *gorm.DB) bool {
 }
 
 //レンタルがスタートする人予約できる日の制限をチェックする
-func checkRentalDayStart(from time.Time) bool {
+func checkRentalDayStart(from *time.Time) bool {
 	nowDay := time.Now()
 	nowDay = timeToTimeYMD(nowDay)
 	canRentalDay := from.AddDate(0, 0, D.CAN_BOOK_DAY_FROM_RENTAL_FROM)
@@ -189,11 +216,11 @@ func checkRentalDayStart(from time.Time) bool {
 }
 
 //仮売上の日程からチェック
-func checkRentalProvisonLimit(from time.Time) bool {
+func checkRentalProvisonLimit(from *time.Time) bool {
 	nowTime := time.Now()
 	nowTime = time.Date(nowTime.Year(), nowTime.Month(), nowTime.Day(), nowTime.Hour(), nowTime.Minute(), 0, 0, time.UTC)
 	//契約できる日かどうか(今はとりあえず仮売上の日にちを超えないようになってるかどうか)
-	subDays := calcSubDate(nowTime, from)
+	subDays := calcSubDate(&nowTime, from)
 	fmt.Printf("%v : %v 時間差: %v \n", from, nowTime, subDays)
 	if subDays > D.DAY_LIMIT {
 		return false

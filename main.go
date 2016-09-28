@@ -26,11 +26,12 @@ func main() {
 	//account.TestDB()
 	db := dbase.OpenDB()
 	defer db.Close()
-	//defer db.Close()
 	//account.AddTestCode(db)
 	http.HandleFunc("/", helloGo)
+	http.HandleFunc("/account/publishOrder", account.PublishOrder)
 	http.HandleFunc("/account/getToken", account.GetToken)
 	http.HandleFunc("/account/addCardInfo", account.AddCardInfo)
+	http.HandleFunc("/testDB", account.TestDB)
 	http.ListenAndServe(":9978", context.ClearHandler(http.DefaultServeMux))
 }
 
