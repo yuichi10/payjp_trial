@@ -6,6 +6,8 @@ import (
 	_ "github.com/jinzhu/gorm"
 	_ "github.com/jinzhu/gorm/dialects/mysql"
 	"time"
+	"fmt"
+	"D"
 )
 
 /*
@@ -14,8 +16,10 @@ import (
 */
 
 const (
+	OrderID = "order_id"
 	RentalFrom = "rental_from"
 	RentalTo = "rental_to"
+	Status = "status"
 )
 
 type Order struct {
@@ -37,10 +41,29 @@ type Order struct {
 	Status            int        `gorm:"column:status;not null;default:0" json:"status"`
 }
 
-//期間がまるごと予約されている期間があるかどうかの検索
-func countOtherOverlapBook(rFrom, rTo *time.Time, itemID uint, db *gorm.DB) int {
+//ダブルブッキングの数を返す
+func getDoubleBookingNum(rFrom, rTo *time.Time, itemID uint, state int, db *gorm.DB) int {
 	count := 0
-	db.Model(&Order{}).Where("(item_id=? AND status=?) AND (? BETWEEN rental_from AND rental_to OR ? BETWEEN rental_from AND rental_to)").Count(&count)
+	count += countOtherOverlapBook(rFrom, rTo, itemID, state, db)
+	count += countOtherCoverBook(rFrom, rTo, itemID, state, db)
+	return count
+}
+//期間の一部もしくは全部がかぶっている予約されている期間があるかどうかの検索
+func countOtherOverlapBook(rFrom, rTo *time.Time, itemID uint, state int, db *gorm.DB) int {
+	count := 0
+	rMerginFrom := rFrom.AddDate(0,0,-D.BOOK_MARGIN_DAYS)
+	rMerginTo   := rTo.AddDate(0,0,D.BOOK_MARGIN_DAYS)
+	baseWhere := fmt.Sprintf("(%v=? AND %v=?) AND (? BETWEEN %v AND %v OR ? BETWEEN %v AND %v)", ItemID, Status, RentalFrom, RentalTo, RentalFrom, RentalTo)
+	db.Model(&Order{}).Where(baseWhere, itemID, state, &rMerginFrom, &rMerginTo).Count(&count)
+	return count
+}
+//すべての期間を含む場合
+func countOtherCoverBook(rFrom, rTo *time.Time, itemID uint, state int, db *gorm.DB) int {
+	count := 0
+	rMerginFrom := rFrom.AddDate(0,0,-D.BOOK_MARGIN_DAYS)
+	rMerginTo   := rTo.AddDate(0,0,D.BOOK_MARGIN_DAYS)
+	baseWhere := fmt.Sprintf("(%v=? AND %v=?) AND (? < %v AND ? > %v)", ItemID, Status, RentalFrom, RentalTo)
+	db.Model(&Order{}).Where(baseWhere, itemID, state, &rMerginFrom, &rMerginTo).Count(&count)
 	return count
 }
 

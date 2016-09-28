@@ -5,7 +5,10 @@ const (
     ServerErrorMessage = "server_error"
     ProcessingErrorMessage = "processing_error"
     InvalidParamKeyMessage = "invalid_param_key"
-    JSONErrorMessage = "json_err"
+    JSONErrorMessage = "json_error"
+
+    //予約時のエラー
+    BookingDaysErrorMessage = "book_day_error"
 
     //ブッキングの決まり日数
     CAN_BOOK_DAY_FROM_RENTAL_FROM = -4

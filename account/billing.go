@@ -28,10 +28,11 @@ func TestDB(w http.ResponseWriter, r *http.Request) {
 	db := dbase.OpenDB()
 	defer db.Close()
 	db.DB()
-	rF,_ := strTimeToTime("2018-8-14")
-	rT,_ := strTimeToTime("2018-8-16")
-	c := countOtherOverlapBook(&rF, &rT, 5, db)
+	rF,_ := strTimeToTime("2015-9-14")
+	rT,_ := strTimeToTime("2015-9-16")
+	c := countOtherOverlapBook(&rF, &rT, 5, 0, db)
 	fmt.Println(c)
+	fmt.Println(countOtherCoverBook(&rF, &rT, 5, 0, db))
 }
 
 const (
@@ -171,6 +172,12 @@ func PublishOrder(w http.ResponseWriter, r *http.Request) {
 	purePrice := order.calcPureRentalPrice()
 	order.ManagementCharge = int (float64 (purePrice) * D.ManegementChargeRatio)
 	order.Amount = purePrice + order.InsurancePrice + order.ManagementCharge
+
+	if !checkRentalDay(order.RentalFrom, order.RentalTo, order.ItemID, db) {
+		//その日に借りれるかどうか
+		responseError(200, D.BookingDaysErrorMessage, w)
+		return
+	}
 	db.Create(&order)
 	orderJs, isSuccess := jsonMarshalAndResponseError(order, w)
 	if !isSuccess {
@@ -180,20 +187,38 @@ func PublishOrder(w http.ResponseWriter, r *http.Request) {
 	return
 }
 
+//同意するかどうか
+func applicationResponse(w http.ResponseWriter, r *http.Request) {
+	r.ParseForm()
+	db := dbase.OpenDB()
+	defer db.Close()
+	//orderID := r.Form.Get(OrderID)
+	//itemID := r.Form.Get(itemID)
+	//userID := r.Form.Get(UserID)
+	//orderIDのチェック
+	//itemIDのチェック
+	//userIDのチェック
+	//予約できる期間かどうか
+	//他に予約されてないかどうか
+	//ステータスをチェック
+	//ステータス変更
+	//他のリクエストをキャンセルする
+}
+
 
 /**
  * かせるかどうかの日にち判定
  */
-func checkRentalDay(from, to *time.Time, itemID string, db *gorm.DB) bool {
+func checkRentalDay(from, to *time.Time, itemID uint, db *gorm.DB) bool {
 	var able bool
 	//仮売上のリミットから借りれるかどうかの判断
 	if able = checkRentalProvisonLimit(from); !able {
 		return able
 	}
 	//もうすでにその期間借りられてないかどうかのチェック
-	//if able = checkDoubleBooking(from, to, itemID, db); !able {
-	//	return able
-	//}
+	if able = checkPreserveDoubleBooking(from, to, itemID, db); !able {
+		return able
+	}
 	//利用日から考えて利用できないかどうかのチェック
 	if able = checkRentalDayStart(from); !able {
 		return able
@@ -227,52 +252,15 @@ func checkRentalProvisonLimit(from *time.Time) bool {
 	}
 	return true
 }
-/*
+
 //その日にもう借りられてないかどうか
-func checkDoubleBooking(tFrom, tTo time.Time, itemID string, db *gorm.DB) bool {
-	//始まりか終わりどちらかが利用期間にかかってる
-	//SELECT count(*) FROM orders WHERE (item_id=4 AND (status=1 OR status=2)) AND ('2016-8-22' BETWEEN rental_from AND rental_to OR '2016-8-22' BETWEEN rental_from AND rental_to);
-	var count int = 0
-	marginFrom := tFrom.AddDate(0,0,-D.BOOK_MARGIN_DAYS)
-	marginTo := tTo.AddDate(0,0,D.BOOK_MARGIN_DAYS)
-	from := timeToStrYMD(marginFrom)
-	to := timeToStrYMD(marginTo)
-	fmt.Printf("from -> to : %v -> %v \n", from, to)
-	//ステータスのsql
-	dbState := fmt.Sprintf("(%v=%v)", ORDER_STATUS, STATUS_GET_CONSENT)
-	dbWhereTime := fmt.Sprintf("('%v' BETWEEN %v AND %v OR '%v' BETWEEN %v AND %v)", from, RENTAL_FROM, RENTAL_TO, to, RENTAL_FROM, RENTAL_TO)
-	dbSql := fmt.Sprintf("SELECT count(*) FROM %v WHERE (%v=%v AND %v) AND %v", ORDER, ITEM_ID, itemID, dbState, dbWhereTime)
-	fmt.Printf("sql: %v \n", dbSql)
-	res, err := db.Query(dbSql)
-	var count1 int
-	if err != nil {
-		return false
-	}
-	for res.Next() {
-		if err := res.Scan(&count1); err != nil {
-			return false
-		}
-	}
-	count += count1
-	//レンタルする間に他のレンタルがある場合
-	dbSql = fmt.Sprintf("SELECT count(*) FROM %v WHERE (%v=%v AND %v) AND ('%v'<%v AND '%v'>%v)", ORDER, ITEM_ID, itemID, dbState, from, RENTAL_FROM, to, RENTAL_TO)
-	fmt.Printf("sql: %v \n", dbSql)
-	res, err = db.Query(dbSql)
-	var count2 int
-	if err != nil {
-		return false
-	}
-	for res.Next() {
-		if err := res.Scan(&count2); err != nil {
-			return false
-		}
-	}
-	count += count2
-	if count == 0 {
+func checkPreserveDoubleBooking(tFrom, tTo *time.Time, itemID uint, db *gorm.DB) bool {
+	num := getDoubleBookingNum(tFrom, tTo, itemID, D.STATUS_GET_CONSENT, db)
+	if num == 0 {
 		return true
 	}
 	return false
 }
-*/
+
 
 
